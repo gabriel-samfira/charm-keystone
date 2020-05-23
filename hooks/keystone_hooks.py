@@ -132,6 +132,7 @@ from keystone_utils import (
     assemble_endpoints,
     endpoints_dict,
     endpoints_checksum,
+    add_trustee_credentials_to_keystone,
 )
 
 from charmhelpers.contrib.hahelpers.cluster import (
@@ -347,6 +348,10 @@ def update_all_identity_relation_units():
     for rid in relation_ids('identity-credentials'):
         for unit in related_units(rid):
             identity_credentials_changed(relation_id=rid, remote_unit=unit)
+    log('Firing trustee_credentials_changed hook for all related services.')
+    for rid in relation_ids('trustee-credentials'):
+        for unit in related_units(rid):
+            trustee_credentials_changed(relation_id=rid, remote_unit=unit)
 
 
 def update_all_domain_backends():
@@ -520,6 +525,29 @@ def identity_credentials_changed(relation_id=None, remote_unit=None):
         add_credentials_to_keystone(relation_id, remote_unit)
     else:
         log('Deferring identity_credentials_changed() to service leader.')
+
+
+@hooks.hook('trustee-credentials-relation-joined',
+            'trustee-credentials-relation-changed')
+def trustee_credentials_changed(relation_id=None, remote_unit=None):
+    if is_elected_leader(CLUSTER_RES):
+        if expect_ha() and not is_clustered():
+            log("Expected to be HA but no hacluster relation yet", level=INFO)
+            return
+        if not is_db_ready():
+            log("trustee-credentials-relation-changed hook fired before db "
+                "ready - deferring until db ready", level=WARNING)
+            return
+
+        if not is_db_initialised():
+            log("Database not yet initialised - deferring "
+                "trustee-credentials-relation updates", level=INFO)
+            return
+
+        # Create the tenant user
+        add_trustee_credentials_to_keystone(relation_id, remote_unit)
+    else:
+        log('Deferring add_trustee_credentials_to_keystone() to service leader.')
 
 
 @hooks.hook('cluster-relation-joined')

@@ -419,6 +419,10 @@ valid_services = {
         "type": "database",
         "desc": "Database as a service"
     },
+    "magnum": {
+        "type": "container-infra",
+        "desc": "OpenStack Container Infrastructure Management Service",
+    },
     "manila": {
         "type": "share",
         "desc": "Shared Filesystem service"
@@ -1941,6 +1945,38 @@ def add_service_to_keystone(relation_id=None, remote_unit=None):
     # settings can flushed so we filter them out for non-peer relation.
     filtered = filter_null(relation_data)
     relation_set(relation_id=relation_id, **filtered)
+
+
+def add_trustee_credentials_to_keystone(relation_id=None, remote_unit=None):
+    manager = get_manager()
+    settings = relation_get(rid=relation_id, unit=remote_unit)
+    domain = settings.get("domain")
+    username = settings.get("username")
+
+    roles = (get_requested_grants(settings) or
+             [config('admin-role')])
+
+
+    if None in (domain, username):
+        # relation not yet ready
+        log("Relation trustee-credentials not yet ready")
+        return
+
+    domain_id = create_or_show_domain(domain)
+    passwd = create_user_credentials(
+        username, get_service_password, set_service_password,
+        domain=domain)
+
+    for role in roles:
+        grant_role(username, role, user_domain=domain, domain=domain)
+
+    relation_data = {
+        "domain_name": domain,
+        "domain_admin_name": username,
+        "domain_admin_password": passwd,
+    }
+
+    peer_store_and_set(relation_id=relation_id, **relation_data)
 
 
 def add_credentials_to_keystone(relation_id=None, remote_unit=None):

@@ -31,6 +31,8 @@ provides:
     interface: keystone-admin
   identity-credentials:
     interface: keystone-credentials
+  trustee-credentials:
+    interface: trustee
 requires:
   shared-db:
     interface: mysql-shared
